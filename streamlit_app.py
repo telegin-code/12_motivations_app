@@ -158,23 +158,32 @@ def app():
             st.info("Сначала заполните опросник на вкладке «Пройти тест».")
         else:
             factor_scores = st.session_state["factor_scores"]
+            name_for_pdf = st.session_state.get("participant_name", "Участник")
+
             show_radar_chart(factor_scores, title="Ваш мотивационный профиль")
             show_bar_chart(factor_scores, title="Ваши значения по 12 факторам")
 
             st.subheader("Таблица факторов")
             df_ind = pd.DataFrame(
                 {
-                    "Фактор": [FACTOR_NAMES[fid] for fid in sorted(factor_scores.keys())],
-                    "Баллы": [factor_scores[fid] for fid in sorted(factor_scores.keys())],
+                    "Фактор": [
+                        FACTOR_NAMES[fid] for fid in sorted(factor_scores.keys())
+                    ],
+                    "Баллы": [
+                        factor_scores[fid] for fid in sorted(factor_scores.keys())
+                    ],
                 }
             )
             st.dataframe(df_ind, use_container_width=True)
 
-            st.markdown(
-                """
-                Для выгрузки индивидуального отчёта вы можете использовать функцию печати
-                браузера (Ctrl+P) и сохранить страницу в PDF.
-                """
+            st.subheader("Скачать индивидуальный PDF-отчёт")
+            pdf_bytes = build_pdf_report(name_for_pdf, factor_scores)
+            safe_name = name_for_pdf.replace(" ", "_")
+            st.download_button(
+                label="📄 Скачать PDF-отчёт",
+                data=pdf_bytes,
+                file_name=f"motivation_profile_{safe_name}.pdf",
+                mime="application/pdf",
             )
 
     # ---------- TAB 3: ГРУППОВОЙ ДАШБОРД ----------
