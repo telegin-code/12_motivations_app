@@ -6,7 +6,121 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
+from fpdf import FPDF
+
 from scoring import QUESTIONS, FACTOR_NAMES, calculate_factors
+
+FONT_PATH = "Roboto-Regular.ttf"  # файл шрифта в корне проекта
+
+# Русские описания факторов для PDF
+FACTOR_DESCRIPTIONS_RU = {
+    1: "Для вас важна ощутимая связь между усилиями и вознаграждением. Высокий доход, премии и бонусы — значимый источник мотивации.",
+    2: "Вы цените стабильность, предсказуемость и безопасные условия труда. Сильный стресс и нестабильность снижают вашу мотивацию.",
+    3: "Вам комфортно, когда есть понятные правила, регламенты и структура. Неопределённость и хаос воспринимаются как демотиваторы.",
+    4: "Для вас важны хорошие отношения в команде, доверие и поддержка коллег. Конфликты и токсичная среда сильно снижают мотивацию.",
+    5: "Вам важно признание результатов, уважение и статус. Вы хотите, чтобы вклад был заметен и оценён.",
+    6: "Вас мотивирует возможность применять и развивать свои способности на содержательных задачах, а не «просто быть занятым».",
+    7: "Вы предпочитаете интересную, осмысленную работу, в которой есть интеллектуальный вызов, а не рутину ради процесса.",
+    8: "Вас заряжают разнообразие задач, новые проекты и перемены. Монотонная, однообразная работа быстро снижает мотивацию.",
+    9: "Для вас важна свобода в способах достижения результата. Избыточный контроль и микроменеджмент воспринимаются как давление.",
+    10: "Вас мотивируют амбициозные цели, измеримый результат и ощущение прогресса. Вам важно видеть, чего вы достигли.",
+    11: "Вам нравится придумывать новые решения, улучшать процессы и подходить к задачам творчески, а не работать «по инструкции».",
+    12: "Для вас важно чувствовать, что работа приносит реальную пользу людям и обществу, а не сводится только к формальному результату.",
+}
+
+
+def classify_level(score: int) -> str:
+    """0–34 низкий, 35–69 средний, 70+ высокий уровень фактора."""
+    if score >= 70:
+        return "высокий"
+    elif score >= 35:
+        return "средний"
+    return "низкий"
+
+
+def build_pdf_report(name: str, factor_scores: dict) -> bytes:
+    """
+    Формирует PDF с мотивационным профилем участника на русском языке
+    с использованием шрифта Roboto (поддержка кириллицы).
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Подключаем шрифт Roboto как основной
+    pdf.add_font("Roboto", "", FONT_PATH, uni=True)
+    pdf.add_font("Roboto", "B", FONT_PATH, uni=True)
+
+    pdf.add_page()
+
+    # Заголовок
+    pdf.set_font("Roboto", "B", 16)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 10, "Мотивационный профиль (12 факторов)", ln=True)
+
+    pdf.set_font("Roboto", "", 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 7, f"Участник: {name}", ln=True)
+    pdf.ln(3)
+
+    pdf.set_font("Roboto", "", 10)
+    pdf.multi_cell(
+        0,
+        5,
+        "Чем выше значение фактора, тем больше он влияет на вашу мотивацию. "
+        "Уровни интерпретации: 0–34 — низкий, 35–69 — средний, 70 и более — высокий.",
+    )
+    pdf.ln(4)
+
+    # Таблица факторов
+    pdf.set_font("Roboto", "B", 11)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_text_color(20, 20, 20)
+
+    pdf.cell(100, 8, "Фактор", border=1, fill=True)
+    pdf.cell(25, 8, "Баллы", border=1, fill=True, align="C")
+    pdf.cell(35, 8, "Уровень", border=1, fill=True, align="C")
+    pdf.ln(8)
+
+    pdf.set_font("Roboto", "", 10)
+    pdf.set_text_color(40, 40, 40)
+
+    # факторы по убыванию значимости
+    for fid in sorted(factor_scores.keys(), key=lambda x: -factor_scores[x]):
+        score = factor_scores[fid]
+        level = classify_level(score)
+        fname = FACTOR_NAMES.get(fid, f"Фактор {fid}")
+
+        pdf.cell(100, 7, fname, border=1)
+        pdf.cell(25, 7, str(score), border=1, align="C")
+        pdf.cell(35, 7, level, border=1, align="C")
+        pdf.ln(7)
+
+    pdf.ln(4)
+
+    # Интерпретации
+    pdf.set_font("Roboto", "B", 12)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 8, "Интерпретация профиля:", ln=True)
+    pdf.ln(2)
+
+    for fid in sorted(factor_scores.keys(), key=lambda x: -factor_scores[x]):
+        score = factor_scores[fid]
+        level = classify_level(score)
+        fname = FACTOR_NAMES.get(fid, f"Фактор {fid}")
+        desc = FACTOR_DESCRIPTIONS_RU.get(fid, "")
+
+        pdf.set_font("Roboto", "B", 11)
+        pdf.set_text_color(40, 40, 80)
+        pdf.multi_cell(0, 6, f"{fname} — {score} баллов ({level} уровень)")
+
+        if desc:
+            pdf.set_font("Roboto", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.multi_cell(0, 5, desc)
+        pdf.ln(2)
+
+    pdf_bytes = pdf.output(dest="S").encode("latin1")
+    return pdf_bytes
 
 RESULTS_FILE = "results.csv"
 
