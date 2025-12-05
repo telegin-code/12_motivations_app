@@ -1,3 +1,4 @@
 streamlit
 pandas
 plotly
+fpdf==1.7.2
